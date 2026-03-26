@@ -5,7 +5,7 @@ import Ably from 'ably';
 import type { UIMessage } from 'ai';
 import { isToolUIPart } from 'ai';
 import { ChatMessage } from './chat-message';
-import { LiveViewPanel } from './live-view-panel';
+import { FloatingLiveView } from './floating-live-view';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -22,6 +22,7 @@ interface ConversationData {
   messages: UIMessage[];
   pendingIdentityConnection: boolean;
   isGenerating: boolean;
+  liveViewUrl: string | null;
 }
 
 function getGreeting() {
@@ -88,20 +89,22 @@ function isUIMessageArray(value: unknown): value is UIMessage[] {
 
 async function loadConversation(conversationId: string): Promise<ConversationData> {
   const res = await fetch(`/api/conversations/${conversationId}`);
-  if (!res.ok) return { messages: [], pendingIdentityConnection: false, isGenerating: false };
+  if (!res.ok) return { messages: [], pendingIdentityConnection: false, isGenerating: false, liveViewUrl: null };
 
   const data = await res.json();
   const pendingIdentityConnection = Boolean(
     data.conversation?.pendingIdentityConnection ?? data.conversation?.pending_identity_connection
   );
   const isGenerating = Boolean(data.isGenerating);
+  const liveViewUrl: string | null =
+    data.conversation?.liveViewUrl ?? data.conversation?.live_view_url ?? null;
 
   if (!data.messages || !Array.isArray(data.messages)) {
-    return { messages: [], pendingIdentityConnection, isGenerating };
+    return { messages: [], pendingIdentityConnection, isGenerating, liveViewUrl };
   }
 
   if (isUIMessageArray(data.messages)) {
-    return { messages: data.messages, pendingIdentityConnection, isGenerating };
+    return { messages: data.messages, pendingIdentityConnection, isGenerating, liveViewUrl };
   }
 
   const messages = data.messages
@@ -112,7 +115,7 @@ async function loadConversation(conversationId: string): Promise<ConversationDat
     })
     .filter((message: UIMessage | null): message is UIMessage => message !== null);
 
-  return { messages, pendingIdentityConnection, isGenerating };
+  return { messages, pendingIdentityConnection, isGenerating, liveViewUrl };
 }
 
 // ---------------------------------------------------------------------------
@@ -290,7 +293,7 @@ function ChatPanelInner({
         if (!cancelled) setConversationData(data);
       })
       .catch(() => {
-        if (!cancelled) setConversationData({ messages: [], pendingIdentityConnection: false, isGenerating: false });
+        if (!cancelled) setConversationData({ messages: [], pendingIdentityConnection: false, isGenerating: false, liveViewUrl: null });
       });
     return () => {
       cancelled = true;
@@ -318,6 +321,7 @@ function ChatPanelInner({
       onClearFirstMessage={onClearFirstMessage}
       initialMessages={conversationData.messages}
       initialIsGenerating={conversationData.isGenerating}
+      initialLiveViewUrl={conversationData.liveViewUrl}
       pendingIdentityConnection={conversationData.pendingIdentityConnection}
       isMobile={isMobile}
       onOpenSidebar={onOpenSidebar}
@@ -335,6 +339,7 @@ function ChatPanelRuntime({
   onClearFirstMessage,
   initialMessages,
   initialIsGenerating,
+  initialLiveViewUrl,
   pendingIdentityConnection,
   isMobile,
   onOpenSidebar,
@@ -344,6 +349,7 @@ function ChatPanelRuntime({
   onClearFirstMessage: () => void;
   initialMessages: UIMessage[];
   initialIsGenerating: boolean;
+  initialLiveViewUrl: string | null;
   pendingIdentityConnection: boolean;
   isMobile: boolean;
   onOpenSidebar?: () => void;
@@ -573,6 +579,13 @@ function ChatPanelRuntime({
     return null;
   }, [messages]);
 
+  const liveViewUrl = toolLiveViewUrl ?? initialLiveViewUrl;
+
+  // Close floating view if URL disappears
+  useEffect(() => {
+    if (!liveViewUrl) setShowLiveView(false);
+  }, [liveViewUrl]);
+
   // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
@@ -649,7 +662,9 @@ function ChatPanelRuntime({
         </div>
       </div>
 
-      {showLiveView && <LiveViewPanel url={toolLiveViewUrl} />}
+      {showLiveView && liveViewUrl && (
+        <FloatingLiveView url={liveViewUrl} onClose={() => setShowLiveView(false)} />
+      )}
 
       {error && (
         <div className="shrink-0 px-3">
@@ -681,24 +696,25 @@ function ChatPanelRuntime({
 
             <div className="flex ui-control-md items-center justify-between border-t border-dashed border-border px-2">
               <div className="flex items-center gap-1">
-                {toolLiveViewUrl && (
-                  <button
-                    type="button"
-                    onClick={() => setShowLiveView((prev) => !prev)}
-                    className={`flex ui-control-sm items-center gap-1.5 rounded-lg px-2 ui-label transition-colors ${
-                      showLiveView
+                <button
+                  type="button"
+                  onClick={() => liveViewUrl && setShowLiveView((prev) => !prev)}
+                  disabled={!liveViewUrl}
+                  className={`hidden sm:flex ui-control-sm items-center gap-1.5 rounded-lg px-2 ui-label transition-colors ${
+                    !liveViewUrl
+                      ? 'text-muted-foreground/40 cursor-not-allowed'
+                      : showLiveView
                         ? 'bg-secondary text-foreground'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    }`}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                      <line x1="8" y1="21" x2="16" y2="21" />
-                      <line x1="12" y1="17" x2="12" y2="21" />
-                    </svg>
-                    Live view
-                  </button>
-                )}
+                  }`}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  Live view
+                </button>
               </div>
 
               <div className="flex items-center">
