@@ -31,15 +31,44 @@ function getInitials(name: string): string {
 function AnchorMark({ size = 28 }: { size?: number }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-lg bg-black"
+      className="flex shrink-0 items-center justify-center rounded-lg bg-foreground"
       style={{ width: `${size}px`, height: `${size}px` }}
       aria-hidden
     >
       <svg width={Math.round(size * 0.52)} height={Math.round(size * 0.46)} viewBox="0 0 79 69" fill="none">
-        <path d="M70.8481 41.1215L47.8049 1.20664C47.3728 0.459672 46.5769 0 45.715 0H32.6718C31.81 0 31.014 0.459672 30.582 1.20664L24.0615 12.5005C23.6316 13.2475 23.6316 14.1668 24.0615 14.9117L37.3686 37.957C38.1794 39.3616 37.1664 41.1194 35.5427 41.1194H8.93062C8.06874 41.1194 7.27282 41.5791 6.84082 42.326L0.322409 53.6221C-0.10747 54.369 -0.10747 55.2884 0.322409 56.0332L6.84295 67.3292C7.27495 68.0762 8.07087 68.5359 8.93275 68.5359H21.976C22.8378 68.5359 23.6338 68.0762 24.0658 67.3292L37.3728 44.2839C38.1858 42.8793 40.2139 42.8793 41.0247 44.2839L54.3318 67.3292C54.7616 68.0762 55.5597 68.5359 56.4216 68.5359H69.4648C70.3267 68.5359 71.1226 68.0762 71.5546 67.3292L78.0751 56.0332C78.505 55.2862 78.505 54.3669 78.0751 53.6221L70.8566 41.1215H70.8481Z" fill="white"/>
+        <path d="M70.8481 41.1215L47.8049 1.20664C47.3728 0.459672 46.5769 0 45.715 0H32.6718C31.81 0 31.014 0.459672 30.582 1.20664L24.0615 12.5005C23.6316 13.2475 23.6316 14.1668 24.0615 14.9117L37.3686 37.957C38.1794 39.3616 37.1664 41.1194 35.5427 41.1194H8.93062C8.06874 41.1194 7.27282 41.5791 6.84082 42.326L0.322409 53.6221C-0.10747 54.369 -0.10747 55.2884 0.322409 56.0332L6.84295 67.3292C7.27495 68.0762 8.07087 68.5359 8.93275 68.5359H21.976C22.8378 68.5359 23.6338 68.0762 24.0658 67.3292L37.3728 44.2839C38.1858 42.8793 40.2139 42.8793 41.0247 44.2839L54.3318 67.3292C54.7616 68.0762 55.5597 68.5359 56.4216 68.5359H69.4648C70.3267 68.5359 71.1226 68.0762 71.5546 67.3292L78.0751 56.0332C78.505 55.2862 78.505 54.3669 78.0751 53.6221L70.8566 41.1215H70.8481Z" fill="currentColor" className="text-background"/>
       </svg>
     </div>
   );
+}
+
+// Group conversations by time period
+function groupConversations(conversations: Conversation[]) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 86400000);
+  const weekAgo = new Date(today.getTime() - 7 * 86400000);
+
+  const groups: { label: string; items: Conversation[] }[] = [];
+  const todayItems: Conversation[] = [];
+  const yesterdayItems: Conversation[] = [];
+  const weekItems: Conversation[] = [];
+  const olderItems: Conversation[] = [];
+
+  for (const conv of conversations) {
+    const created = new Date(conv.createdAt);
+    if (created >= today) todayItems.push(conv);
+    else if (created >= yesterday) yesterdayItems.push(conv);
+    else if (created >= weekAgo) weekItems.push(conv);
+    else olderItems.push(conv);
+  }
+
+  if (todayItems.length > 0) groups.push({ label: 'Today', items: todayItems });
+  if (yesterdayItems.length > 0) groups.push({ label: 'Yesterday', items: yesterdayItems });
+  if (weekItems.length > 0) groups.push({ label: 'This Week', items: weekItems });
+  if (olderItems.length > 0) groups.push({ label: 'Older', items: olderItems });
+
+  return groups;
 }
 
 export function ChatSidebar({
@@ -66,26 +95,27 @@ export function ChatSidebar({
     return () => window.clearTimeout(t);
   }, [fetchConversations]);
 
-  const recentThreads = conversations.slice(0, 20);
+  const recentThreads = conversations.slice(0, 30);
+  const groups = groupConversations(recentThreads);
 
   const handleSelect = (id: string) => { onSelect(id); if (isMobile) onCloseMobile(); };
   const handleNew = () => { onNew(); if (isMobile) onCloseMobile(); };
 
   /* ── Expanded sidebar content ── */
   const ExpandedContent = (
-    <>
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="px-4 pt-4 pb-3">
+      <div className="shrink-0 px-4 pt-4 pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <AnchorMark size={32} />
-            <span className="text-[14.5px] font-bold tracking-wide text-[#1b2234]">
+            <AnchorMark size={30} />
+            <span className="ui-label font-semibold tracking-wide text-foreground">
               Anchor Agents
             </span>
           </div>
           <button
             onClick={isMobile ? onCloseMobile : onToggle}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white/70"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title={isMobile ? 'Close Sidebar' : 'Collapse Sidebar'}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -97,11 +127,13 @@ export function ChatSidebar({
             </svg>
           </button>
         </div>
+      </div>
 
-        {/* New Thread */}
+      {/* New Thread */}
+      <div className="shrink-0 px-3 pb-2">
         <button
           onClick={handleNew}
-          className="mt-4 flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-[#d1d5de] bg-[#f6f7f9] px-3 text-left text-[13px] font-medium text-[#374154] shadow-[0_1px_2px_rgba(17,24,39,0.06)] transition-colors hover:bg-white"
+          className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-border bg-background px-3 text-left ui-label font-medium text-foreground shadow-sm transition-colors hover:bg-secondary"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -111,49 +143,59 @@ export function ChatSidebar({
       </div>
 
       {/* Thread list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-20 pt-1" style={{ scrollbarWidth: 'none' }}>
-        <div className="mt-1 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a8294]">
-          Recent Threads
-        </div>
-        <div className="mt-2 space-y-0.5">
-          {recentThreads.map((conv) => {
-            const active = activeId === conv.id;
-            return (
-              <button
-                key={conv.id}
-                onClick={() => handleSelect(conv.id)}
-                className={`group flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-[13.5px] transition-colors ${
-                  active
-                    ? 'bg-white font-semibold text-[#1a2233] shadow-[0_1px_2px_rgba(15,23,42,0.06)]'
-                    : 'font-medium text-[#3d4a5c] hover:bg-[#eef0f5]'
-                }`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[#929aaa]">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-                <span className="truncate">{conv.title}</span>
-              </button>
-            );
-          })}
-          {recentThreads.length === 0 && (
-            <div className="px-3 py-2 text-[12px] text-[#8b93a2]">No threads yet.</div>
-          )}
-        </div>
+      <div className="flex-1 overflow-y-auto px-3 pb-20" style={{ scrollbarWidth: 'none' }}>
+        {groups.map((group) => (
+          <div key={group.label} className="mt-3 first:mt-1">
+            <div className="px-2 pb-1 ui-caption font-medium uppercase tracking-widest text-muted-foreground">
+              {group.label}
+            </div>
+            <div className="space-y-px">
+              {group.items.map((conv) => {
+                const active = activeId === conv.id;
+                return (
+                  <button
+                    key={conv.id}
+                    onClick={() => handleSelect(conv.id)}
+                    className={`group flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-left ui-label transition-colors ${
+                      active
+                        ? 'bg-secondary font-medium text-foreground'
+                        : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+                    }`}
+                  >
+                    <svg
+                      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                      className={`shrink-0 ${active ? 'text-foreground' : 'text-muted-foreground/60'}`}
+                    >
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span className="truncate">{conv.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        {recentThreads.length === 0 && (
+          <div className="px-3 py-6 text-center ui-label text-muted-foreground">
+            No threads yet
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="absolute bottom-0 left-0 right-0 border-t border-[#d8dde6] bg-[#f6f7fa] px-4 py-3">
+      <div className="absolute bottom-0 left-0 right-0 border-t border-border bg-background/80 px-3 py-2.5 backdrop-blur-sm">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(221_80%_54%)] text-[11px] font-semibold text-white">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand ui-caption font-semibold text-white">
             {getInitials(userName)}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-semibold text-[#182033]">{userName}</div>
-            <div className="truncate text-[11px] text-[#697387]">{userEmail}</div>
+            <div className="truncate ui-label font-medium text-foreground">{userName}</div>
+            <div className="truncate ui-caption text-muted-foreground">{userEmail}</div>
           </div>
           <button
             onClick={() => setSettingsOpen(true)}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title="Settings"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -163,7 +205,7 @@ export function ChatSidebar({
           </button>
           <a
             href="/auth/signout"
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title="Log out"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -174,7 +216,7 @@ export function ChatSidebar({
           </a>
         </div>
       </div>
-    </>
+    </div>
   );
 
   /* ── Mobile: slide-over sheet ── */
@@ -188,11 +230,11 @@ export function ChatSidebar({
           onClick={onCloseMobile}
         />
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-border bg-[#f3f4f7] transition-transform duration-200 lg:hidden ${
+          className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-border bg-background transition-transform duration-200 lg:hidden ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          <div className="relative flex h-full flex-col">{ExpandedContent}</div>
+          {ExpandedContent}
         </aside>
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </>
@@ -203,13 +245,13 @@ export function ChatSidebar({
   if (!isOpen) {
     return (
       <>
-        <div className="flex h-full w-[50px] flex-col items-center border-r border-border bg-[#f3f4f7] py-3">
+        <div className="flex h-full w-[50px] flex-col items-center border-r border-border bg-background py-3">
           <button onClick={onToggle} className="cursor-pointer" title="Open Sidebar">
             <AnchorMark size={28} />
           </button>
           <button
             onClick={handleNew}
-            className="mt-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-border-hard bg-white text-[#6a7384]"
+            className="mt-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-border bg-secondary text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title="New Thread"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -219,7 +261,7 @@ export function ChatSidebar({
           <div className="flex-1" />
           <button
             onClick={() => setSettingsOpen(true)}
-            className="mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#8a93a3] transition-colors hover:bg-white/70"
+            className="mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title="Settings"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -236,7 +278,7 @@ export function ChatSidebar({
   /* ── Desktop expanded ── */
   return (
     <>
-      <aside className="shell-sidebar relative hidden h-full flex-col border-r border-border bg-[#f3f4f7] lg:flex">
+      <aside className="shell-sidebar relative hidden h-full border-r border-border bg-background lg:block">
         {ExpandedContent}
       </aside>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
