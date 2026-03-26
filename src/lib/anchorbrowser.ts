@@ -41,6 +41,23 @@ export async function tagIdentityWithUser(identityId: string, userId: string) {
   }
 }
 
+export async function deleteIdentity(identityId: string) {
+  try {
+    await getClient().identities.delete(identityId);
+  } catch {
+    // Identity may already be deleted
+  }
+}
+
+export async function deleteAllUserIdentities(userId: string) {
+  const identities = await listUserIdentities(userId);
+  await Promise.all(
+    identities
+      .filter((id): id is typeof id & { id: string } => typeof id.id === 'string')
+      .map((id) => deleteIdentity(id.id)),
+  );
+}
+
 export async function createSession(identityId: string) {
   const response = await getClient().sessions.create({
     browser: {
