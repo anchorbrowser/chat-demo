@@ -79,16 +79,6 @@ export function createTools(ctx: ToolContext) {
         'List the user\'s existing LinkedIn identities. Call this first when the user wants to do anything on LinkedIn to check if they already have a connected account.',
       inputSchema: z.object({}),
       execute: async () => {
-        // Check if this conversation already has an identity set (e.g. via callback)
-        const conversation = await getConversation(ctx.conversationId, ctx.userId);
-        if (conversation?.identityId) {
-          return {
-            identities: [{ id: conversation.identityId, name: 'Connected identity', status: 'linked' }],
-            preSelectedIdentityId: conversation.identityId,
-            message: 'This conversation already has a LinkedIn identity linked. You can select it to proceed.',
-          };
-        }
-
         const identities = await listUserIdentities(ctx.userId);
 
         const mappedIdentities = identities.map((id) => ({
@@ -97,23 +87,24 @@ export function createTools(ctx: ToolContext) {
           status: id.status ?? 'unknown',
         }));
 
+        // Always generate a connect URL so the user can add a new account
+        let connectUrl: string | undefined;
+        try {
+          const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
+          const tokenData = await createIdentityToken(callbackUrl);
+          const token = tokenData?.token;
+          if (token) {
+            connectUrl = getIdentityCreationUrl(token);
+          }
+        } catch (err) {
+          console.error('[list_linkedin_identities] createIdentityToken failed:', err);
+        }
+
         const hasActiveIdentity = identities.some(
           (id) => id.status?.toLowerCase() === 'validated'
         );
 
         if (identities.length === 0 || !hasActiveIdentity) {
-          let connectUrl: string | undefined;
-          try {
-            const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
-            const tokenData = await createIdentityToken(callbackUrl);
-            const token = tokenData?.token;
-            if (token) {
-              connectUrl = getIdentityCreationUrl(token);
-            }
-          } catch (err) {
-            console.error('[list_linkedin_identities] createIdentityToken failed:', err);
-          }
-
           return {
             identities: mappedIdentities,
             requiresIdentityConnection: true,
@@ -124,7 +115,7 @@ export function createTools(ctx: ToolContext) {
           };
         }
 
-        return { identities: mappedIdentities };
+        return { identities: mappedIdentities, connectUrl };
       },
     }),
 
