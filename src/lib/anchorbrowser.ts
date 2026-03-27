@@ -20,7 +20,13 @@ export async function listUserIdentities(userId: string) {
   const response = await getClient().applications.listIdentities(getAppId(), {
     metadata: JSON.stringify({ userId }),
   });
-  return response.identities ?? [];
+  const identities = response.identities ?? [];
+  if (identities.length > 0) return identities;
+
+  // Fallback: list all application identities when user-specific filter returns nothing.
+  // This handles identities created without userId metadata.
+  const fallback = await getClient().applications.listIdentities(getAppId(), {});
+  return fallback.identities ?? [];
 }
 
 export async function createIdentityToken(callbackUrl: string) {

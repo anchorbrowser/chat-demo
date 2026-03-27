@@ -97,11 +97,12 @@ export function createTools(ctx: ToolContext) {
           status: id.status ?? 'unknown',
         }));
 
-        const hasActiveIdentity = identities.some(
-          (id) => id.status?.toLowerCase() === 'validated'
+        const usableStatuses = new Set(['validated', 'pending']);
+        const hasUsableIdentity = identities.some(
+          (id) => usableStatuses.has(id.status?.toLowerCase() ?? '')
         );
 
-        if (identities.length === 0 || !hasActiveIdentity) {
+        if (identities.length === 0 || !hasUsableIdentity) {
           let connectUrl: string | undefined;
           try {
             const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;

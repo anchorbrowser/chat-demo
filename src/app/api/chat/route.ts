@@ -194,7 +194,8 @@ export async function POST(req: Request) {
 
     // Return immediately — the stream runs in the background via after().
     return Response.json({ assistantMsgId });
-  } catch {
+  } catch (err) {
+    console.error('[chat] POST error:', err);
     return new Response('Internal server error', { status: 500 });
   }
 }
