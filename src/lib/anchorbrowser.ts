@@ -12,26 +12,27 @@ function getClient() {
   return _client;
 }
 
-function getAppId() {
-  return process.env.ANCHORBROWSER_APPLICATION_ID!;
+export async function listApplications() {
+  const response = await getClient().applications.list();
+  return (response as unknown as { applications?: Array<{ id: string; name: string; url: string; description?: string; identity_count?: number }> }).applications ?? [];
 }
 
-export async function listUserIdentities(userId: string) {
-  const response = await getClient().applications.listIdentities(getAppId(), {
-    metadata: JSON.stringify({ userId }),
+export async function createApplication(source: string, name?: string, description?: string) {
+  const response = await getClient().applications.create({
+    source,
+    ...(name ? { name } : {}),
+    ...(description ? { description } : {}),
   });
-  const identities = response.identities ?? [];
-  if (identities.length > 0) return identities;
-
-  // Fallback: list all application identities when user-specific filter returns nothing.
-  // This handles identities created without userId metadata.
-  const fallback = await getClient().applications.listIdentities(getAppId(), {});
-  return fallback.identities ?? [];
+  return response as unknown as { id: string; name: string; url: string };
 }
 
-export async function createIdentityToken(callbackUrl: string) {
-  // SDK returns { token, expires_at, token_hash } at top level
-  const response = await getClient().applications.createIdentityToken(getAppId(), {
+export async function listApplicationIdentities(applicationId: string) {
+  const response = await getClient().applications.listIdentities(applicationId, {});
+  return response.identities ?? [];
+}
+
+export async function createIdentityToken(applicationId: string, callbackUrl: string) {
+  const response = await getClient().applications.createIdentityToken(applicationId, {
     callbackUrl,
   });
   return response as unknown as { token?: string; expires_at?: unknown; token_hash?: string };
@@ -79,7 +80,6 @@ export async function deleteSession(sessionId: string) {
 }
 
 export async function runTask(taskId: string, sessionId: string, inputs: Record<string, unknown>) {
-  // Convert inputs to string values as the SDK expects Record<string, string>
   const inputParams: Record<string, string> = {};
   for (const [key, value] of Object.entries(inputs)) {
     inputParams[key] = typeof value === 'string' ? value : JSON.stringify(value);
@@ -102,7 +102,7 @@ export async function performWebTask(sessionId: string, prompt: string, url?: st
 }
 
 export function getIdentityCreationUrl(token: string, userName?: string) {
-  const baseUrl = process.env.ANCHORBROWSER_APP_URL ?? 'https://app.anchorbrowser.io';
+  const baseUrl = process.env.ANCHORBROWSER_APP_URL ?? process.env.ANCHORBROWSER_DASHBOARD_API_URL ?? 'https://app.anchorbrowser.io';
   const params = new URLSearchParams({ token });
   if (userName) {
     params.set('userName', userName);

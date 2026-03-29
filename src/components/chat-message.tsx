@@ -10,9 +10,11 @@ const MIN_TOOL_SKELETON_MS = 300;
 const INVALID_COMPONENT_OUTPUT_TIMEOUT_MS = 1200;
 
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
-  list_linkedin_identities: 'Search LinkedIn Accounts',
+  list_applications: 'Finding Applications',
+  create_application: 'Creating Application',
+  list_identities: 'Search Accounts',
   select_identity: 'Connecting Account',
-  create_identity_link: 'Create LinkedIn Connection',
+  create_identity_link: 'Create Connection',
   perform_web_task: 'Executing Task',
   linkedin_search_people: 'Search People',
   linkedin_view_profile: 'View Profile',
@@ -167,7 +169,7 @@ function ToolPart({
 }) {
   const { state } = part;
   const connectUrl = getIdentityConnectUrl(toolName, part);
-  const requiresConnection = toolName === 'list_linkedin_identities' && Boolean(getToolOutput(part)?.requiresIdentityConnection);
+  const requiresConnection = (toolName === 'list_identities' || toolName === 'list_linkedin_identities') && Boolean(getToolOutput(part)?.requiresIdentityConnection);
   const expectsComponent = toolName === 'create_identity_link' || Boolean(connectUrl) || requiresConnection;
   const hasValidComponentOutput = !expectsComponent || Boolean(connectUrl);
 
@@ -295,9 +297,14 @@ function ConnectIdentityCard({ connectUrl }: { connectUrl: string }) {
       <div className="rounded-[22px] border border-border-hard/70 bg-background px-4 py-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <LinkedInLogo />
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-[11px] bg-primary text-primary-foreground shadow-sm sm:h-11 sm:w-11">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.2.1l2.1-2.1a5 5 0 0 0-7.1-7.1L11 5" />
+                <path d="M14 11a5 5 0 0 0-7.2-.1l-2.1 2.1a5 5 0 1 0 7.1 7.1L13 19" />
+              </svg>
+            </span>
             <div className="truncate text-[1.08rem] font-medium leading-none tracking-tight text-foreground sm:text-[1.15rem]">
-              LinkedIn
+              Connect Account
             </div>
           </div>
 
@@ -307,10 +314,11 @@ function ConnectIdentityCard({ connectUrl }: { connectUrl: string }) {
             rel="noopener noreferrer"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-border-hard bg-background px-3.5 py-1.5 text-[0.86rem] font-semibold text-foreground shadow-sm transition-colors hover:bg-secondary sm:text-[0.9rem]"
           >
-            Connect Account
+            Connect
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M10 13a5 5 0 0 0 7.2.1l2.1-2.1a5 5 0 0 0-7.1-7.1L11 5" />
-              <path d="M14 11a5 5 0 0 0-7.2-.1l-2.1 2.1a5 5 0 1 0 7.1 7.1L13 19" />
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
           </a>
         </div>
@@ -319,21 +327,10 @@ function ConnectIdentityCard({ connectUrl }: { connectUrl: string }) {
   );
 }
 
-function LinkedInLogo() {
-  return (
-    <span className="inline-flex h-10 w-10 items-center justify-center rounded-[11px] bg-[#0A66C2] text-white shadow-sm sm:h-11 sm:w-11">
-      <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M6.47 8.14A1.57 1.57 0 1 1 6.5 5a1.57 1.57 0 0 1-.03 3.14ZM5 9.34h3V19H5V9.34Zm4.7 0h2.87v1.32h.04c.4-.76 1.38-1.56 2.85-1.56 3.05 0 3.61 2 3.61 4.6V19h-3v-4.7c0-1.12-.02-2.56-1.56-2.56-1.57 0-1.81 1.22-1.81 2.48V19h-3V9.34Z" />
-      </svg>
-    </span>
-  );
-}
-
 function formatToolName(name: string): string {
   if (TOOL_DISPLAY_NAMES[name]) return TOOL_DISPLAY_NAMES[name];
   return name
     .replace(/_/g, ' ')
-    .replace(/linkedin /i, 'LinkedIn ')
     .replace(/^./, (c) => c.toUpperCase());
 }
 
@@ -417,7 +414,7 @@ function getIdentityConnectUrl(toolName: string, part: any): string | null {
     return output.url;
   }
 
-  if (toolName === 'list_linkedin_identities' && typeof output.connectUrl === 'string') {
+  if ((toolName === 'list_identities' || toolName === 'list_linkedin_identities') && typeof output.connectUrl === 'string') {
     return output.connectUrl;
   }
 

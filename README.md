@@ -64,9 +64,8 @@ Fill in the values:
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string (default provided for Docker) |
 | `ABLY_API_KEY` | Ably API key ([ably.com](https://ably.com) - free tier works) |
-| `ANCHORBROWSER_API_KEY` | Your Anchorbrowser API key |
+| `ANCHORBROWSER_API_KEY` | Your Anchorbrowser API key (required for dev, optional in prod) |
 | `ANCHORBROWSER_API_URL` | API URL (default: `https://api.anchorbrowser.io`) |
-| `ANCHORBROWSER_APPLICATION_ID` | Your Anchorbrowser Application ID |
 | `WORKOS_CLIENT_ID` | WorkOS client ID |
 | `WORKOS_API_KEY` | WorkOS API key |
 | `WORKOS_COOKIE_PASSWORD` | Random 32+ char string for session encryption |

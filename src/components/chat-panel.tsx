@@ -549,7 +549,7 @@ function ChatPanelRuntime({
       body: JSON.stringify({ pending_identity_connection: 0 }),
     }).catch(() => {});
     queueMicrotask(() => {
-      handleSend('My LinkedIn identity was just connected. Should I continue with what I asked?');
+      handleSend('My account was just connected. Please continue with what I asked.');
     });
   }, [pendingIdentityConnection, isGenerating, handleSend, conversationId]);
 
@@ -649,8 +649,6 @@ function ChatPanelRuntime({
         </div>
       </div>
 
-      {showLiveView && <LiveViewPanel url={toolLiveViewUrl} />}
-
       {error && (
         <div className="shrink-0 px-3">
           <div className="chat-content-max mx-auto rounded-lg bg-destructive/10 px-3 py-2 ui-label text-destructive">
@@ -671,7 +669,7 @@ function ChatPanelRuntime({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about LinkedIn..."
+                placeholder="What would you like to automate?"
                 className="ui-body w-full resize-none bg-transparent leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
                 rows={1}
                 style={{ minHeight: '68px', maxHeight: '200px' }}
@@ -721,6 +719,12 @@ function ChatPanelRuntime({
           </div>
         </form>
       </div>
+
+      <LiveViewPanel
+        url={toolLiveViewUrl}
+        visible={showLiveView}
+        onToggle={() => setShowLiveView((prev) => !prev)}
+      />
     </div>
   );
 }
@@ -774,7 +778,7 @@ function EmptyStateWithInput({
       <div className="flex flex-1 flex-col items-center justify-center px-5">
         <div className="mb-8 text-center">
           <h1 className="ui-title font-semibold tracking-tight text-foreground">{getGreeting()}</h1>
-          <p className="mt-2 ui-text text-muted-foreground">What would you like to do on LinkedIn today?</p>
+          <p className="mt-2 ui-text text-muted-foreground">What would you like to automate today?</p>
         </div>
 
         <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
@@ -814,7 +818,7 @@ function EmptyStateWithInput({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about LinkedIn..."
+                placeholder="What would you like to automate?"
                 className="ui-body w-full resize-none bg-transparent leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
                 rows={1}
                 style={{ minHeight: '68px', maxHeight: '200px' }}

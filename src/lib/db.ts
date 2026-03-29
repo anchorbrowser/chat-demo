@@ -37,7 +37,7 @@ export async function listConversations(userId: string): Promise<Conversation[]>
 export async function updateConversation(
   id: string,
   userId: string,
-  updates: Partial<Pick<Conversation, 'title' | 'identityId' | 'sessionId' | 'liveViewUrl' | 'pendingIdentityConnection'>>
+  updates: Partial<Pick<Conversation, 'title' | 'applicationId' | 'identityId' | 'sessionId' | 'liveViewUrl' | 'pendingIdentityConnection'>>
 ) {
   await prisma.conversation.updateMany({
     where: { id, userId },
