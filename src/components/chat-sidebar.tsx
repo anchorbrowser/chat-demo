@@ -31,7 +31,7 @@ function getInitials(name: string): string {
 function AnchorMark({ size = 28 }: { size?: number }) {
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-lg bg-[#111827]"
+      className="flex shrink-0 items-center justify-center rounded-lg bg-black"
       style={{ width: `${size}px`, height: `${size}px` }}
       aria-hidden
     >
@@ -41,41 +41,6 @@ function AnchorMark({ size = 28 }: { size?: number }) {
     </div>
   );
 }
-
-// Group conversations by time period
-function groupConversations(conversations: Conversation[]) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today.getTime() - 86400000);
-  const weekAgo = new Date(today.getTime() - 7 * 86400000);
-
-  const groups: { label: string; items: Conversation[] }[] = [];
-  const todayItems: Conversation[] = [];
-  const yesterdayItems: Conversation[] = [];
-  const weekItems: Conversation[] = [];
-  const olderItems: Conversation[] = [];
-
-  for (const conv of conversations) {
-    const created = new Date(conv.createdAt);
-    if (created >= today) todayItems.push(conv);
-    else if (created >= yesterday) yesterdayItems.push(conv);
-    else if (created >= weekAgo) weekItems.push(conv);
-    else olderItems.push(conv);
-  }
-
-  if (todayItems.length > 0) groups.push({ label: 'Today', items: todayItems });
-  if (yesterdayItems.length > 0) groups.push({ label: 'Yesterday', items: yesterdayItems });
-  if (weekItems.length > 0) groups.push({ label: 'This Week', items: weekItems });
-  if (olderItems.length > 0) groups.push({ label: 'Older', items: olderItems });
-
-  return groups;
-}
-
-/* ── Sidebar background: subtle cool gray tint ── */
-const SIDEBAR_BG = 'bg-[#f5f6f8]';
-const SIDEBAR_HOVER = 'hover:bg-[#ebedf2]';
-const SIDEBAR_ACTIVE = 'bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]';
-const FOOTER_BG = 'bg-[#f5f6f8]/90';
 
 export function ChatSidebar({
   activeId, onSelect, onNew, isOpen, onToggle,
@@ -101,27 +66,26 @@ export function ChatSidebar({
     return () => window.clearTimeout(t);
   }, [fetchConversations]);
 
-  const recentThreads = conversations.slice(0, 30);
-  const groups = groupConversations(recentThreads);
+  const recentThreads = conversations.slice(0, 20);
 
   const handleSelect = (id: string) => { onSelect(id); if (isMobile) onCloseMobile(); };
   const handleNew = () => { onNew(); if (isMobile) onCloseMobile(); };
 
   /* ── Expanded sidebar content ── */
   const ExpandedContent = (
-    <div className="flex h-full flex-col">
+    <>
       {/* Header */}
-      <div className="shrink-0 px-4 pt-5 pb-4">
+      <div className="px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <AnchorMark size={30} />
-            <span className="text-[14px] font-semibold tracking-tight text-[#111827]">
+            <AnchorMark size={32} />
+            <span className="text-[14.5px] font-bold tracking-wide text-[#1b2234]">
               Anchor Agents
             </span>
           </div>
           <button
             onClick={isMobile ? onCloseMobile : onToggle}
-            className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#9099a8] transition-colors ${SIDEBAR_HOVER}`}
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white/70"
             title={isMobile ? 'Close Sidebar' : 'Collapse Sidebar'}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -133,15 +97,13 @@ export function ChatSidebar({
             </svg>
           </button>
         </div>
-      </div>
 
-      {/* New Thread */}
-      <div className="shrink-0 px-3 pb-3">
+        {/* New Thread */}
         <button
           onClick={handleNew}
-          className="flex h-[38px] w-full cursor-pointer items-center gap-2 rounded-lg border border-[#dce0e8] bg-white px-3 text-left text-[13px] font-medium text-[#374151] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:border-[#c5cad4] hover:shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+          className="mt-4 flex h-9 w-full cursor-pointer items-center gap-2 rounded-lg border border-[#d1d5de] bg-[#f6f7f9] px-3 text-left text-[13px] font-medium text-[#374154] shadow-[0_1px_2px_rgba(17,24,39,0.06)] transition-colors hover:bg-white"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           New Thread
@@ -149,85 +111,70 @@ export function ChatSidebar({
       </div>
 
       {/* Thread list */}
-      <div className="flex-1 overflow-y-auto px-3 pb-[76px] pt-1" style={{ scrollbarWidth: 'none' }}>
-        {groups.map((group) => (
-          <div key={group.label} className="mt-5 first:mt-0">
-            <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#9099a8]">
-              {group.label}
-            </div>
-            <div className="space-y-1">
-              {group.items.map((conv) => {
-                const active = activeId === conv.id;
-                return (
-                  <button
-                    key={conv.id}
-                    onClick={() => handleSelect(conv.id)}
-                    className={`group flex h-[38px] w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-[13px] transition-all ${
-                      active
-                        ? `${SIDEBAR_ACTIVE} font-medium text-[#111827]`
-                        : `font-normal text-[#4b5563] ${SIDEBAR_HOVER}`
-                    }`}
-                  >
-                    <svg
-                      width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                      className={`shrink-0 ${active ? 'text-[#6b7280]' : 'text-[#b0b7c3]'}`}
-                    >
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span className="truncate">{conv.title}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        {recentThreads.length === 0 && (
-          <div className="flex flex-col items-center gap-1.5 px-3 py-8 text-center">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#c5cad4]">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <span className="text-[12px] text-[#9099a8]">No threads yet</span>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto px-3 pb-20 pt-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="mt-1 px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-[#7a8294]">
+          Recent Threads
+        </div>
+        <div className="mt-2 space-y-0.5">
+          {recentThreads.map((conv) => {
+            const active = activeId === conv.id;
+            return (
+              <button
+                key={conv.id}
+                onClick={() => handleSelect(conv.id)}
+                className={`group flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 text-left text-[13.5px] transition-colors ${
+                  active
+                    ? 'bg-white font-semibold text-[#1a2233] shadow-[0_1px_2px_rgba(15,23,42,0.06)]'
+                    : 'font-medium text-[#3d4a5c] hover:bg-[#eef0f5]'
+                }`}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-[#929aaa]">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                <span className="truncate">{conv.title}</span>
+              </button>
+            );
+          })}
+          {recentThreads.length === 0 && (
+            <div className="px-3 py-2 text-[12px] text-[#8b93a2]">No threads yet.</div>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
-      <div className={`absolute bottom-0 left-0 right-0 border-t border-[#e2e5eb] ${FOOTER_BG} px-4 py-3 backdrop-blur-sm`}>
-        <div className="flex items-center gap-3">
-          <div className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-full bg-[#3b82f6] text-[11px] font-semibold text-white">
+      <div className="absolute bottom-0 left-0 right-0 border-t border-[#d8dde6] bg-[#f6f7fa] px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[hsl(221_80%_54%)] text-[11px] font-semibold text-white">
             {getInitials(userName)}
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-medium text-[#111827]">{userName}</div>
-            <div className="truncate text-[11px] text-[#9099a8]">{userEmail}</div>
+            <div className="truncate text-[13px] font-semibold text-[#182033]">{userName}</div>
+            <div className="truncate text-[11px] text-[#697387]">{userEmail}</div>
           </div>
-          <div className="flex items-center gap-0.5">
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#9099a8] transition-colors ${SIDEBAR_HOVER}`}
-              title="Settings"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-            </button>
-            <a
-              href="/auth/signout"
-              className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#9099a8] transition-colors ${SIDEBAR_HOVER}`}
-              title="Log out"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
-            </a>
-          </div>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white"
+            title="Settings"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <a
+            href="/auth/signout"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md text-[#8d95a4] transition-colors hover:bg-white"
+            title="Log out"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </a>
         </div>
       </div>
-    </div>
+    </>
   );
 
   /* ── Mobile: slide-over sheet ── */
@@ -235,17 +182,17 @@ export function ChatSidebar({
     return (
       <>
         <div
-          className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 lg:hidden ${
+          className={`fixed inset-0 z-40 bg-black/35 transition-opacity duration-200 lg:hidden ${
             mobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
           }`}
           onClick={onCloseMobile}
         />
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-[#e2e5eb] ${SIDEBAR_BG} transition-transform duration-200 lg:hidden ${
+          className={`fixed inset-y-0 left-0 z-50 w-[280px] border-r border-border bg-[#f3f4f7] transition-transform duration-200 lg:hidden ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
-          {ExpandedContent}
+          <div className="relative flex h-full flex-col">{ExpandedContent}</div>
         </aside>
         <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       </>
@@ -256,13 +203,13 @@ export function ChatSidebar({
   if (!isOpen) {
     return (
       <>
-        <div className={`flex h-full w-[50px] flex-col items-center border-r border-[#e2e5eb] ${SIDEBAR_BG} py-3`}>
+        <div className="flex h-full w-[50px] flex-col items-center border-r border-border bg-[#f3f4f7] py-3">
           <button onClick={onToggle} className="cursor-pointer" title="Open Sidebar">
             <AnchorMark size={28} />
           </button>
           <button
             onClick={handleNew}
-            className="mt-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[#dce0e8] bg-white text-[#6b7280] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:border-[#c5cad4]"
+            className="mt-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-border-hard bg-white text-[#6a7384]"
             title="New Thread"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -272,10 +219,10 @@ export function ChatSidebar({
           <div className="flex-1" />
           <button
             onClick={() => setSettingsOpen(true)}
-            className={`mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#9099a8] transition-colors ${SIDEBAR_HOVER}`}
+            className="mb-1 flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg text-[#8a93a3] transition-colors hover:bg-white/70"
             title="Settings"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" />
               <circle cx="12" cy="12" r="3" />
             </svg>
@@ -289,7 +236,7 @@ export function ChatSidebar({
   /* ── Desktop expanded ── */
   return (
     <>
-      <aside className={`shell-sidebar relative hidden h-full border-r border-[#e2e5eb] ${SIDEBAR_BG} lg:block`}>
+      <aside className="shell-sidebar relative hidden h-full flex-col border-r border-border bg-[#f3f4f7] lg:flex">
         {ExpandedContent}
       </aside>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />

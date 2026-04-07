@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Anchor <> Agents',
-  description: 'AI-powered LinkedIn automation agent built with Anchorbrowser',
+  description: 'AI-powered browser automation agent built with Anchorbrowser',
 };
 
 export default function RootLayout({
