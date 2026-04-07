@@ -1,5 +1,6 @@
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
+import type Anchorbrowser from 'anchorbrowser';
 import {
   listApplications,
   createApplication,
@@ -28,9 +29,10 @@ function getTaskIds() {
   };
 }
 
-interface ToolContext {
+export interface ToolContext {
   userId: string;
   conversationId: string;
+  abClient: Anchorbrowser;
 }
 
 function getAppBaseUrl(): string {
@@ -42,7 +44,7 @@ async function ensureSession(ctx: ToolContext): Promise<{ sessionId: string; liv
   if (!conversation) throw new Error('Conversation not found');
 
   if (conversation.sessionId) {
-    const session = await getSession(conversation.sessionId);
+    const session = await getSession(ctx.abClient, conversation.sessionId);
     if (session) {
       return { sessionId: conversation.sessionId, liveViewUrl: conversation.liveViewUrl ?? '' };
     }
@@ -52,7 +54,7 @@ async function ensureSession(ctx: ToolContext): Promise<{ sessionId: string; liv
     throw new Error('NO_IDENTITY');
   }
 
-  const session = await createSession(conversation.identityId);
+  const session = await createSession(ctx.abClient, conversation.identityId);
   if (!session?.id) throw new Error('Session creation returned no ID');
   await updateConversation(ctx.conversationId, ctx.userId, {
     sessionId: session.id,
@@ -68,7 +70,7 @@ async function runLinkedInTask(
   inputs: Record<string, unknown>
 ) {
   const { sessionId } = await ensureSession(ctx);
-  return runTask(taskId, sessionId, inputs);
+  return runTask(ctx.abClient, taskId, sessionId, inputs);
 }
 
 export function createTools(ctx: ToolContext) {
@@ -81,7 +83,7 @@ export function createTools(ctx: ToolContext) {
         'List all applications (websites/services) configured in the user\'s Anchorbrowser account. Use this to check if an application already exists for a target website before creating a new one.',
       inputSchema: z.object({}),
       execute: async () => {
-        const apps = await listApplications();
+        const apps = await listApplications(ctx.abClient);
         return {
           applications: apps.map((a) => ({
             id: a.id,
@@ -102,7 +104,7 @@ export function createTools(ctx: ToolContext) {
         description: z.string().optional().describe('Optional description'),
       }),
       execute: async ({ source, name, description }) => {
-        const app = await createApplication(source, name, description);
+        const app = await createApplication(ctx.abClient, source, name, description);
         await updateConversation(ctx.conversationId, ctx.userId, { applicationId: app.id });
         return {
           applicationId: app.id,
@@ -131,7 +133,7 @@ export function createTools(ctx: ToolContext) {
           };
         }
 
-        const identities = await listApplicationIdentities(applicationId);
+        const identities = await listApplicationIdentities(ctx.abClient, applicationId);
 
         const mappedIdentities = identities.map((id) => ({
           id: id.id ?? '',
@@ -148,7 +150,7 @@ export function createTools(ctx: ToolContext) {
           let connectUrl: string | undefined;
           try {
             const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
-            const tokenData = await createIdentityToken(applicationId, callbackUrl);
+            const tokenData = await createIdentityToken(ctx.abClient, applicationId, callbackUrl);
             const token = tokenData?.token;
             if (token) {
               connectUrl = getIdentityCreationUrl(token);
@@ -180,7 +182,7 @@ export function createTools(ctx: ToolContext) {
       execute: async ({ identityId }) => {
         await updateConversation(ctx.conversationId, ctx.userId, { identityId });
         try {
-          const session = await createSession(identityId);
+          const session = await createSession(ctx.abClient, identityId);
           if (!session?.id) throw new Error('Session creation returned no ID');
           await updateConversation(ctx.conversationId, ctx.userId, {
             sessionId: session.id,
@@ -213,7 +215,7 @@ export function createTools(ctx: ToolContext) {
       }),
       execute: async ({ applicationId, userName }) => {
         const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
-        const tokenData = await createIdentityToken(applicationId, callbackUrl);
+        const tokenData = await createIdentityToken(ctx.abClient, applicationId, callbackUrl);
         const token = tokenData?.token;
         if (!token) throw new Error('Failed to generate identity token');
         const url = getIdentityCreationUrl(token, userName);
@@ -233,7 +235,7 @@ export function createTools(ctx: ToolContext) {
       }),
       execute: async ({ prompt, url }) => {
         const { sessionId } = await ensureSession(ctx);
-        return performWebTask(sessionId, prompt, url);
+        return performWebTask(ctx.abClient, sessionId, prompt, url);
       },
     }),
   };

@@ -5,8 +5,10 @@ import {
   type UIMessage,
 } from 'ai';
 import { after } from 'next/server';
+import { cookies } from 'next/headers';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { createTools } from '@/lib/tools';
+import { resolveUserApiKey, createClient } from '@/lib/anchorbrowser';
 import { getModel } from '@/lib/models';
 import { SYSTEM_PROMPT } from '@/lib/system-prompt';
 import {
@@ -30,6 +32,12 @@ export async function POST(req: Request) {
       return new Response('Unauthorized', { status: 401 });
     }
 
+    const cookieStore = await cookies();
+    const wosCookie = cookieStore.get('wos-session')?.value;
+    if (!wosCookie) {
+      return new Response('Session cookie missing', { status: 401 });
+    }
+
     const body = await req.json().catch(() => null);
     if (!body?.conversationId || !Array.isArray(body.messages)) {
       return new Response('Invalid request: conversationId and messages array required', { status: 400 });
@@ -45,8 +53,11 @@ export async function POST(req: Request) {
       return new Response('Conversation not found', { status: 404 });
     }
 
+    const userApiKey = await resolveUserApiKey(wosCookie);
+    const abClient = createClient(userApiKey);
+
     const modelMessages = await convertToModelMessages(rawMessages);
-    const tools = createTools({ userId: user.id, conversationId });
+    const tools = createTools({ userId: user.id, conversationId, abClient });
 
     // Create a 'generating' placeholder for the assistant message in DB.
     const assistantMsgId = randomUUID();

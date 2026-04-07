@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getConversation, updateConversation } from '@/lib/db';
-import { createSession, listApplicationIdentities, tagIdentityWithUser } from '@/lib/anchorbrowser';
+import { createSession, listApplicationIdentities, tagIdentityWithUser, resolveUserApiKey, createClient } from '@/lib/anchorbrowser';
 
 function browserRedirectUrl(path: string): string {
   const base = (
@@ -21,6 +22,15 @@ export async function GET(
     return NextResponse.redirect(browserRedirectUrl('/'));
   }
 
+  const cookieStore = await cookies();
+  const wosCookie = cookieStore.get('wos-session')?.value;
+  if (!wosCookie) {
+    return NextResponse.redirect(browserRedirectUrl('/'));
+  }
+
+  const userApiKey = await resolveUserApiKey(wosCookie);
+  const abClient = createClient(userApiKey);
+
   const { conversationId } = await params;
   const { searchParams } = new URL(req.url);
 
@@ -33,7 +43,7 @@ export async function GET(
 
   if (!identityId && conversation.applicationId) {
     try {
-      const identities = await listApplicationIdentities(conversation.applicationId);
+      const identities = await listApplicationIdentities(abClient, conversation.applicationId);
       if (identities.length > 0) {
         identityId = identities[identities.length - 1].id as string;
       }
@@ -47,7 +57,7 @@ export async function GET(
     return NextResponse.redirect(browserRedirectUrl(`/conversation/${conversationId}`));
   }
 
-  await tagIdentityWithUser(identityId, user.id);
+  await tagIdentityWithUser(abClient, identityId, user.id);
 
   await updateConversation(conversationId, user.id, {
     identityId,
@@ -55,7 +65,7 @@ export async function GET(
   });
 
   try {
-    const sessionData = await createSession(identityId);
+    const sessionData = await createSession(abClient, identityId);
     if (sessionData?.id) {
       await updateConversation(conversationId, user.id, {
         sessionId: sessionData.id,
