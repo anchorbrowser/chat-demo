@@ -1,7 +1,10 @@
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
+import type Anchorbrowser from 'anchorbrowser';
 import {
-  listUserIdentities,
+  listApplications,
+  createApplication,
+  listApplicationIdentities,
   createIdentityToken,
   createSession,
   getSession,
@@ -26,9 +29,10 @@ function getTaskIds() {
   };
 }
 
-interface ToolContext {
+export interface ToolContext {
   userId: string;
   conversationId: string;
+  abClient: Anchorbrowser;
 }
 
 function getAppBaseUrl(): string {
@@ -40,7 +44,7 @@ async function ensureSession(ctx: ToolContext): Promise<{ sessionId: string; liv
   if (!conversation) throw new Error('Conversation not found');
 
   if (conversation.sessionId) {
-    const session = await getSession(conversation.sessionId);
+    const session = await getSession(ctx.abClient, conversation.sessionId);
     if (session) {
       return { sessionId: conversation.sessionId, liveViewUrl: conversation.liveViewUrl ?? '' };
     }
@@ -50,7 +54,7 @@ async function ensureSession(ctx: ToolContext): Promise<{ sessionId: string; liv
     throw new Error('NO_IDENTITY');
   }
 
-  const session = await createSession(conversation.identityId);
+  const session = await createSession(ctx.abClient, conversation.identityId);
   if (!session?.id) throw new Error('Session creation returned no ID');
   await updateConversation(ctx.conversationId, ctx.userId, {
     sessionId: session.id,
@@ -66,7 +70,7 @@ async function runLinkedInTask(
   inputs: Record<string, unknown>
 ) {
   const { sessionId } = await ensureSession(ctx);
-  return runTask(taskId, sessionId, inputs);
+  return runTask(ctx.abClient, taskId, sessionId, inputs);
 }
 
 export function createTools(ctx: ToolContext) {
@@ -74,12 +78,62 @@ export function createTools(ctx: ToolContext) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: Record<string, Tool<any, any>> = {
-    list_linkedin_identities: tool({
+    list_applications: tool({
       description:
-        'List the user\'s existing LinkedIn identities. Call this first when the user wants to do anything on LinkedIn to check if they already have a connected account.',
+        'List all applications (websites/services) configured in the user\'s Anchorbrowser account. Use this to check if an application already exists for a target website before creating a new one.',
       inputSchema: z.object({}),
       execute: async () => {
-        const identities = await listUserIdentities(ctx.userId);
+        const apps = await listApplications(ctx.abClient);
+        return {
+          applications: apps.map((a) => ({
+            id: a.id,
+            name: a.name,
+            url: a.url,
+            identityCount: a.identity_count ?? 0,
+          })),
+        };
+      },
+    }),
+
+    create_application: tool({
+      description:
+        'Create a new application for a target website. Provide the full URL of the site (e.g. "https://example.com"). If an application for that URL already exists, the existing one is returned. The created application ID is stored on the conversation for subsequent identity and session calls.',
+      inputSchema: z.object({
+        source: z.string().describe('The full URL of the target website (e.g. "https://example.com")'),
+        name: z.string().optional().describe('Optional display name for the application'),
+        description: z.string().optional().describe('Optional description'),
+      }),
+      execute: async ({ source, name, description }) => {
+        const app = await createApplication(ctx.abClient, source, name, description);
+        await updateConversation(ctx.conversationId, ctx.userId, { applicationId: app.id });
+        return {
+          applicationId: app.id,
+          name: app.name,
+          url: app.url,
+          message: `Application "${app.name}" is ready.`,
+        };
+      },
+    }),
+
+    list_identities: tool({
+      description:
+        'List identities (user accounts) linked to an application. Call this after ensuring the conversation has an application set. If the conversation already has an identity linked, returns that directly.',
+      inputSchema: z.object({
+        applicationId: z.string().describe('The application ID to list identities for'),
+      }),
+      execute: async ({ applicationId }) => {
+        await updateConversation(ctx.conversationId, ctx.userId, { applicationId });
+
+        const conversation = await getConversation(ctx.conversationId, ctx.userId);
+        if (conversation?.identityId) {
+          return {
+            identities: [{ id: conversation.identityId, name: 'Connected identity', status: 'linked' }],
+            preSelectedIdentityId: conversation.identityId,
+            message: 'This conversation already has an identity linked. You can select it to proceed.',
+          };
+        }
+
+        const identities = await listApplicationIdentities(ctx.abClient, applicationId);
 
         const mappedIdentities = identities.map((id) => ({
           id: id.id ?? '',
@@ -87,48 +141,48 @@ export function createTools(ctx: ToolContext) {
           status: id.status ?? 'unknown',
         }));
 
-        // Always generate a connect URL so the user can add a new account
-        let connectUrl: string | undefined;
-        try {
-          const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
-          const tokenData = await createIdentityToken(callbackUrl);
-          const token = tokenData?.token;
-          if (token) {
-            connectUrl = getIdentityCreationUrl(token);
-          }
-        } catch (err) {
-          console.error('[list_linkedin_identities] createIdentityToken failed:', err);
-        }
-
-        const hasActiveIdentity = identities.some(
-          (id) => id.status?.toLowerCase() === 'validated'
+        const usableStatuses = new Set(['validated', 'pending']);
+        const hasUsableIdentity = identities.some(
+          (id) => usableStatuses.has(id.status?.toLowerCase() ?? '')
         );
 
-        if (identities.length === 0 || !hasActiveIdentity) {
+        if (identities.length === 0 || !hasUsableIdentity) {
+          let connectUrl: string | undefined;
+          try {
+            const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
+            const tokenData = await createIdentityToken(ctx.abClient, applicationId, callbackUrl);
+            const token = tokenData?.token;
+            if (token) {
+              connectUrl = getIdentityCreationUrl(token);
+            }
+          } catch (err) {
+            console.error('[list_identities] createIdentityToken failed:', err);
+          }
+
           return {
             identities: mappedIdentities,
             requiresIdentityConnection: true,
             connectUrl,
             message: identities.length === 0
-              ? (connectUrl ? 'No LinkedIn identity connected. Use the connection link.' : 'No LinkedIn identity connected.')
-              : (connectUrl ? 'Existing identities have connection issues. Use the connection link to add a new one, or select an existing identity.' : 'Existing identities have connection issues.'),
+              ? (connectUrl ? 'No identity connected for this app. Use the connection link.' : 'No identity connected.')
+              : (connectUrl ? 'Existing identities have issues. Use the connection link or select an existing one.' : 'Existing identities have issues.'),
           };
         }
 
-        return { identities: mappedIdentities, connectUrl };
+        return { identities: mappedIdentities };
       },
     }),
 
     select_identity: tool({
       description:
-        'Select a LinkedIn identity for this chat session. Call this after listing identities and the user chooses one, or when there is only one identity available.',
+        'Select an identity for this chat session and create a browser session. Call this after listing identities and the user chooses one, or when there is only one identity available.',
       inputSchema: z.object({
         identityId: z.string().describe('The identity ID to use for this session'),
       }),
       execute: async ({ identityId }) => {
         await updateConversation(ctx.conversationId, ctx.userId, { identityId });
         try {
-          const session = await createSession(identityId);
+          const session = await createSession(ctx.abClient, identityId);
           if (!session?.id) throw new Error('Session creation returned no ID');
           await updateConversation(ctx.conversationId, ctx.userId, {
             sessionId: session.id,
@@ -136,7 +190,7 @@ export function createTools(ctx: ToolContext) {
           });
           return {
             success: true,
-            message: 'Identity selected and browser session created. Ready to automate LinkedIn.',
+            message: 'Identity selected and browser session created. Ready to automate.',
             liveViewUrl: session.live_view_url,
           };
         } catch (error: unknown) {
@@ -154,33 +208,34 @@ export function createTools(ctx: ToolContext) {
 
     create_identity_link: tool({
       description:
-        'Return a direct link for the user to connect their LinkedIn account. Call this when the user has no identities or wants to add a new one.',
+        'Generate a link for the user to connect their account for a specific application. Call this when the user has no identities or wants to add a new one.',
       inputSchema: z.object({
+        applicationId: z.string().describe('The application ID to create the identity link for'),
         userName: z.string().optional().describe('Optional display name for the identity'),
       }),
-      execute: async ({ userName }) => {
+      execute: async ({ applicationId, userName }) => {
         const callbackUrl = `${getAppBaseUrl()}/api/identity-callback/${ctx.conversationId}`;
-        const tokenData = await createIdentityToken(callbackUrl);
+        const tokenData = await createIdentityToken(ctx.abClient, applicationId, callbackUrl);
         const token = tokenData?.token;
         if (!token) throw new Error('Failed to generate identity token');
         const url = getIdentityCreationUrl(token, userName);
         return {
           url,
-          message: 'Use this link to connect your LinkedIn account.',
+          message: 'Use this link to connect your account.',
         };
       },
     }),
 
     perform_web_task: tool({
       description:
-        'FALLBACK ONLY: Use AI to perform a browser automation task on LinkedIn when no specific tool exists. This uses an AI agent to control the browser, which can take longer and is less reliable. Always warn the user that this is an AI-driven action that may take some time.',
+        'FALLBACK ONLY: Use AI to perform a browser automation task when no specific tool exists. This uses an AI agent to control the browser, which can take longer and is less reliable. Always warn the user that this is an AI-driven action.',
       inputSchema: z.object({
-        prompt: z.string().describe('Description of the task for the AI to perform on LinkedIn'),
+        prompt: z.string().describe('Description of the task for the AI to perform'),
         url: z.string().optional().describe('Optional starting URL'),
       }),
       execute: async ({ prompt, url }) => {
         const { sessionId } = await ensureSession(ctx);
-        return performWebTask(sessionId, prompt, url);
+        return performWebTask(ctx.abClient, sessionId, prompt, url);
       },
     }),
   };
@@ -300,7 +355,6 @@ export function createTools(ctx: ToolContext) {
     },
   };
 
-  // Only include LinkedIn tools that have their task ID configured
   for (const [name, { taskId, def }] of Object.entries(linkedInTools)) {
     if (taskId) {
       tools[name] = def;

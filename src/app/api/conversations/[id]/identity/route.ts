@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { withAuth } from '@workos-inc/authkit-nextjs';
 import { getConversation, updateConversation } from '@/lib/db';
-import { createSession } from '@/lib/anchorbrowser';
+import { createSession, resolveUserApiKey, createClient } from '@/lib/anchorbrowser';
 
 export async function POST(
   req: Request,
@@ -12,6 +13,15 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const cookieStore = await cookies();
+    const wosCookie = cookieStore.get('wos-session')?.value;
+    if (!wosCookie) {
+      return NextResponse.json({ error: 'Session cookie missing' }, { status: 401 });
+    }
+
+    const userApiKey = await resolveUserApiKey(wosCookie);
+    const abClient = createClient(userApiKey);
 
     const { id } = await params;
     const conversation = await getConversation(id, user.id);
@@ -28,7 +38,7 @@ export async function POST(
     await updateConversation(id, user.id, { identityId });
 
     try {
-      const sessionData = await createSession(identityId);
+      const sessionData = await createSession(abClient, identityId);
       if (!sessionData?.id) {
         return NextResponse.json({ error: 'Failed to create session' }, { status: 500 });
       }

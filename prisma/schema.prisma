@@ -11,6 +11,7 @@ model Conversation {
   id                        String    @id @default(uuid())
   userId                    String    @map("user_id")
   title                     String    @default("New Chat")
+  applicationId             String?   @map("application_id")
   identityId                String?   @map("identity_id")
   sessionId                 String?   @map("session_id")
   liveViewUrl               String?   @map("live_view_url")

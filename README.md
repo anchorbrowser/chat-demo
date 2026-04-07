@@ -58,19 +58,23 @@ docker compose up -d
 cp .env.example .env.local
 ```
 
-Fill in the values:
+Fill in the values (see `.env.example` for the full template):
 
 | Variable | Description |
 |----------|-------------|
+| `NEXT_PUBLIC_APP_URL` | Public app URL (local dev: `http://localhost:3000`) |
 | `DATABASE_URL` | PostgreSQL connection string (default provided for Docker) |
 | `ABLY_API_KEY` | Ably API key ([ably.com](https://ably.com) - free tier works) |
-| `ANCHORBROWSER_API_KEY` | Your Anchorbrowser API key |
+| `ANCHORBROWSER_API_KEY` | Your Anchorbrowser API key (required for dev, optional in prod) |
 | `ANCHORBROWSER_API_URL` | API URL (default: `https://api.anchorbrowser.io`) |
-| `ANCHORBROWSER_APPLICATION_ID` | Your Anchorbrowser Application ID |
+| `ANCHORBROWSER_DASHBOARD_API_URL` | Dashboard API URL (default: `https://app.anchorbrowser.io`) |
 | `WORKOS_CLIENT_ID` | WorkOS client ID |
 | `WORKOS_API_KEY` | WorkOS API key |
 | `WORKOS_COOKIE_PASSWORD` | Random 32+ char string for session encryption |
-| `ANTHROPIC_API_KEY` | Anthropic API key (default model) |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Must match WorkOS redirect (e.g. `http://localhost:3000/auth/callback`) |
+| `ANTHROPIC_API_KEY` | Anthropic API key (default chat model) |
+| `OPENAI_API_KEY` | Optional; use if you switch the app to an OpenAI model |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Optional; use if you switch the app to Gemini |
 | `TASK_ID_LINKEDIN_*` | Task IDs for each LinkedIn tool (see below) |
 
 ### 4. Initialize the database
@@ -116,6 +120,34 @@ Open [http://localhost:3000](http://localhost:3000).
 5. **Realtime updates** - Each tool call, result, and text delta is broadcast via Ably WebSocket
 6. **Persistence** - Tool results are saved to PostgreSQL after each step, so navigating away preserves state
 7. **Reconnection** - Returning to a chat loads history from DB and reconnects to the Ably channel for live updates
+
+## Syncing from a remote copy
+
+If you iterate on a VPS (for example after uploading a tarball), avoid copying thousands of files with recursive `scp`. Archive on the server, download one file, extract, then merge into this repo.
+
+**On the server** (from the parent of the project directory):
+
+```bash
+tar czf chat-demo-sync.tar.gz my-project-folder
+```
+
+**On your machine**, copy the archive down, extract somewhere temporary, then rsync into this clone (keeps `.git`, local `.env.local`, and SSH keys out of the way):
+
+```bash
+rsync -av --delete \
+  --exclude '.git/' \
+  --exclude 'node_modules/' \
+  --exclude '.next/' \
+  --exclude '.env' \
+  --exclude '.env.local' \
+  --exclude '._*' \
+  --exclude 'data/' \
+  --exclude '*.pem' \
+  /path/to/extracted/my-project-folder/ \
+  /path/to/chat-demo/
+```
+
+Then run `npm install` and `npx prisma generate` if `package-lock.json` or the Prisma schema changed. Commit from this repository as usual.
 
 ## License
 

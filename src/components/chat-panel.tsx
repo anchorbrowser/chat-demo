@@ -5,7 +5,7 @@ import Ably from 'ably';
 import type { UIMessage } from 'ai';
 import { isToolUIPart } from 'ai';
 import { ChatMessage } from './chat-message';
-import { FloatingLiveView } from './floating-live-view';
+import { LiveViewPanel } from './live-view-panel';
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -22,7 +22,6 @@ interface ConversationData {
   messages: UIMessage[];
   pendingIdentityConnection: boolean;
   isGenerating: boolean;
-  liveViewUrl: string | null;
 }
 
 function getGreeting() {
@@ -89,22 +88,20 @@ function isUIMessageArray(value: unknown): value is UIMessage[] {
 
 async function loadConversation(conversationId: string): Promise<ConversationData> {
   const res = await fetch(`/api/conversations/${conversationId}`);
-  if (!res.ok) return { messages: [], pendingIdentityConnection: false, isGenerating: false, liveViewUrl: null };
+  if (!res.ok) return { messages: [], pendingIdentityConnection: false, isGenerating: false };
 
   const data = await res.json();
   const pendingIdentityConnection = Boolean(
     data.conversation?.pendingIdentityConnection ?? data.conversation?.pending_identity_connection
   );
   const isGenerating = Boolean(data.isGenerating);
-  const liveViewUrl: string | null =
-    data.conversation?.liveViewUrl ?? data.conversation?.live_view_url ?? null;
 
   if (!data.messages || !Array.isArray(data.messages)) {
-    return { messages: [], pendingIdentityConnection, isGenerating, liveViewUrl };
+    return { messages: [], pendingIdentityConnection, isGenerating };
   }
 
   if (isUIMessageArray(data.messages)) {
-    return { messages: data.messages, pendingIdentityConnection, isGenerating, liveViewUrl };
+    return { messages: data.messages, pendingIdentityConnection, isGenerating };
   }
 
   const messages = data.messages
@@ -115,7 +112,7 @@ async function loadConversation(conversationId: string): Promise<ConversationDat
     })
     .filter((message: UIMessage | null): message is UIMessage => message !== null);
 
-  return { messages, pendingIdentityConnection, isGenerating, liveViewUrl };
+  return { messages, pendingIdentityConnection, isGenerating };
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +290,7 @@ function ChatPanelInner({
         if (!cancelled) setConversationData(data);
       })
       .catch(() => {
-        if (!cancelled) setConversationData({ messages: [], pendingIdentityConnection: false, isGenerating: false, liveViewUrl: null });
+        if (!cancelled) setConversationData({ messages: [], pendingIdentityConnection: false, isGenerating: false });
       });
     return () => {
       cancelled = true;
@@ -321,7 +318,6 @@ function ChatPanelInner({
       onClearFirstMessage={onClearFirstMessage}
       initialMessages={conversationData.messages}
       initialIsGenerating={conversationData.isGenerating}
-      initialLiveViewUrl={conversationData.liveViewUrl}
       pendingIdentityConnection={conversationData.pendingIdentityConnection}
       isMobile={isMobile}
       onOpenSidebar={onOpenSidebar}
@@ -339,7 +335,6 @@ function ChatPanelRuntime({
   onClearFirstMessage,
   initialMessages,
   initialIsGenerating,
-  initialLiveViewUrl,
   pendingIdentityConnection,
   isMobile,
   onOpenSidebar,
@@ -349,7 +344,6 @@ function ChatPanelRuntime({
   onClearFirstMessage: () => void;
   initialMessages: UIMessage[];
   initialIsGenerating: boolean;
-  initialLiveViewUrl: string | null;
   pendingIdentityConnection: boolean;
   isMobile: boolean;
   onOpenSidebar?: () => void;
@@ -555,7 +549,7 @@ function ChatPanelRuntime({
       body: JSON.stringify({ pending_identity_connection: 0 }),
     }).catch(() => {});
     queueMicrotask(() => {
-      handleSend('My LinkedIn identity was just connected. Should I continue with what I asked?');
+      handleSend('My account was just connected. Please continue with what I asked.');
     });
   }, [pendingIdentityConnection, isGenerating, handleSend, conversationId]);
 
@@ -578,13 +572,6 @@ function ChatPanelRuntime({
     }
     return null;
   }, [messages]);
-
-  const liveViewUrl = toolLiveViewUrl ?? initialLiveViewUrl;
-
-  // Close floating view if URL disappears
-  useEffect(() => {
-    if (!liveViewUrl) setShowLiveView(false);
-  }, [liveViewUrl]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -662,10 +649,6 @@ function ChatPanelRuntime({
         </div>
       </div>
 
-      {showLiveView && liveViewUrl && (
-        <FloatingLiveView url={liveViewUrl} onClose={() => setShowLiveView(false)} />
-      )}
-
       {error && (
         <div className="shrink-0 px-3">
           <div className="chat-content-max mx-auto rounded-lg bg-destructive/10 px-3 py-2 ui-label text-destructive">
@@ -686,7 +669,7 @@ function ChatPanelRuntime({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about LinkedIn..."
+                placeholder="What would you like to automate?"
                 className="ui-body w-full resize-none bg-transparent leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
                 rows={1}
                 style={{ minHeight: '68px', maxHeight: '200px' }}
@@ -696,25 +679,24 @@ function ChatPanelRuntime({
 
             <div className="flex ui-control-md items-center justify-between border-t border-dashed border-border px-2">
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => liveViewUrl && setShowLiveView((prev) => !prev)}
-                  disabled={!liveViewUrl}
-                  className={`hidden sm:flex ui-control-sm items-center gap-1.5 rounded-lg px-2 ui-label transition-colors ${
-                    !liveViewUrl
-                      ? 'text-muted-foreground/40 cursor-not-allowed'
-                      : showLiveView
+                {toolLiveViewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setShowLiveView((prev) => !prev)}
+                    className={`flex ui-control-sm items-center gap-1.5 rounded-lg px-2 ui-label transition-colors ${
+                      showLiveView
                         ? 'bg-secondary text-foreground'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                  }`}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                  Live view
-                </button>
+                    }`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                      <line x1="8" y1="21" x2="16" y2="21" />
+                      <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                    Live view
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center">
@@ -737,6 +719,12 @@ function ChatPanelRuntime({
           </div>
         </form>
       </div>
+
+      <LiveViewPanel
+        url={toolLiveViewUrl}
+        visible={showLiveView}
+        onToggle={() => setShowLiveView((prev) => !prev)}
+      />
     </div>
   );
 }
@@ -790,7 +778,7 @@ function EmptyStateWithInput({
       <div className="flex flex-1 flex-col items-center justify-center px-5">
         <div className="mb-8 text-center">
           <h1 className="ui-title font-semibold tracking-tight text-foreground">{getGreeting()}</h1>
-          <p className="mt-2 ui-text text-muted-foreground">What would you like to do on LinkedIn today?</p>
+          <p className="mt-2 ui-text text-muted-foreground">What would you like to automate today?</p>
         </div>
 
         <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
@@ -830,7 +818,7 @@ function EmptyStateWithInput({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about LinkedIn..."
+                placeholder="What would you like to automate?"
                 className="ui-body w-full resize-none bg-transparent leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
                 rows={1}
                 style={{ minHeight: '68px', maxHeight: '200px' }}
